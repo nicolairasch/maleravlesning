@@ -481,9 +481,16 @@ function onReadingChange(id,year,month,val){
   dbCache[ck(id,year,month)].reading=num;
   const prev=getPrevReading(id,year,month);
   if(num!==null&&prev!==null)dbCache[ck(id,year,month)].consumption=num-prev;
-  renderMeters();
-  const inp=document.getElementById(`inp-${id}`);
-  if(inp){inp.focus();inp.value=val;const l=val.length;inp.setSelectionRange(l,l);}
+  const card=document.getElementById(`savebtn-${id}`)?.closest('.meter-card');
+  if(card){
+    const cons=dbCache[ck(id,year,month)]?.consumption;
+    const consEl=card.querySelector('.consumption-value');
+    if(consEl&&cons!=null)consEl.textContent=Math.round(cons).toLocaleString('nb-NO')+' kWh';
+    if(consEl&&cons!=null){
+      const prev2=month>0?getConsumption(id,year,month-1):getConsumption(id,year-1,11);
+      if(prev2&&prev2>0){consEl.className='consumption-value'+(cons>prev2*1.1?' up':cons<prev2*0.9?' down':'');}
+    }
+  }
 }
 
 async function saveReading(id,year,month){
