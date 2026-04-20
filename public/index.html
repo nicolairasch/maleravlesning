@@ -343,7 +343,7 @@ canvas#capture-canvas { display: none; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 const SUPABASE_URL='https://vaivnbwpatdxvgirhrht.supabase.co';
-const SUPABASE_KEY='sb_publishable_MYU_ipmt9d88qx6GnvjHCA_ysGl2aiF';
+const SUPABASE_KEY='eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJyb2xlIjogImFub24iLCAiaXNzIjogInN1cGFiYXNlIiwgImlhdCI6IDE3NDE4MjQwMDAsICJleHAiOiAyMzk4MjkxMjAwfQ.tu4Q4mB_1munSKYm9D16GxIHrM5bY2kiZMvPoT1Ek_8';
 const MONTHS=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 const METERS=[
   {id:'fellesmaler',name:'Fellesmåler',meterId:'HN81004484',group:'Fellesmålere'},
@@ -481,6 +481,9 @@ function onReadingChange(id,year,month,val){
   dbCache[ck(id,year,month)].reading=num;
   const prev=getPrevReading(id,year,month);
   if(num!==null&&prev!==null)dbCache[ck(id,year,month)].consumption=num-prev;
+  renderMeters();
+  const inp=document.getElementById(`inp-${id}`);
+  if(inp){inp.focus();inp.value=val;const l=val.length;inp.setSelectionRange(l,l);}
 }
 
 async function saveReading(id,year,month){
