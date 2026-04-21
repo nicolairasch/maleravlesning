@@ -42,7 +42,7 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
- 
+
 /* HEADER */
 .header { background: var(--ink); padding: 0 16px; position: sticky; top: 0; z-index: 100; }
 .header-inner { max-width: 820px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 56px; }
@@ -343,7 +343,7 @@ canvas#capture-canvas { display: none; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 const SUPABASE_URL='https://vaivnbwpatdxvgirhrht.supabase.co';
-const SUPABASE_KEY='eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJyb2xlIjogImFub24iLCAiaXNzIjogInN1cGFiYXNlIiwgImlhdCI6IDE3NDE4MjQwMDAsICJleHAiOiAyMzk4MjkxMjAwfQ.tu4Q4mB_1munSKYm9D16GxIHrM5bY2kiZMvPoT1Ek_8';
+const SUPABASE_KEY='sb_publishable_MYU_ipmt9d88qx6GnvjHCA_ysGl2aiF';
 const MONTHS=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 const METERS=[
   {id:'fellesmaler',name:'Fellesmåler',meterId:'HN81004484',group:'Fellesmålere'},
@@ -457,7 +457,7 @@ function renderMeters(){
         <p class="meter-name">${m.name}</p>
         <p class="meter-sub">${m.meterId||'&nbsp;'}</p>
         <div class="input-group">
-          <input class="reading-input" type="number" id="inp-${m.id}" placeholder="Målerstand…" value="${cur!==null&&cur!==undefined?cur:''}" oninput="onReadingChange('${m.id}',${year},${month},this.value)"/>
+          <input class="reading-input" type="text" inputmode="numeric" pattern="[0-9]*" id="inp-${m.id}" placeholder="Målerstand…" value="${cur!==null&&cur!==undefined?cur:''}" oninput="onReadingChange('${m.id}',${year},${month},this.value)"/>
           <button class="cam-btn" id="cam-${m.id}" onclick="openCamModal('${m.id}','${m.name}')" title="Skann med kamera">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -476,7 +476,7 @@ function renderMeters(){
 }
 
 function onReadingChange(id,year,month,val){
-  const num=val===''?null:parseFloat(val);
+  const num=val===''?null:parseInt(val.replace(/\s/g,''),10);
   if(!dbCache[ck(id,year,month)])dbCache[ck(id,year,month)]={};
   dbCache[ck(id,year,month)].reading=num;
   const prev=getPrevReading(id,year,month);
@@ -496,7 +496,7 @@ function onReadingChange(id,year,month,val){
 async function saveReading(id,year,month){
   const inp=document.getElementById(`inp-${id}`);
   const btn=document.getElementById(`savebtn-${id}`);
-  const val=inp?parseFloat(inp.value):null;
+  const val=inp?parseInt(inp.value.replace(/\s/g,''),10):null;
   if(val===null||isNaN(val)){inp&&inp.focus();return;}
   const prev=getPrevReading(id,year,month);
   const consumption=prev!==null?val-prev:null;
