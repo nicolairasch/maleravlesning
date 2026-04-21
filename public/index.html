@@ -388,7 +388,8 @@ async function dbFetch(path,opts={}){
     ...opts
   });
   if(!res.ok){const t=await res.text();throw new Error(t);}
-  return res.json();
+  const text=await res.text();return text?
+    JSON.parse(text):[];
 }
 
 async function loadAllFromDB(){
