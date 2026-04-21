@@ -502,7 +502,7 @@ async function saveReading(id,year,month){
   const consumption=prev!==null?val-prev:null;
   btn.textContent='Lagrer…';btn.className='save-btn saving';
   try{
-    await dbFetch('maler_avlesninger',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({meter_id:id,year,month,reading:val,consumption})});
+    await dbFetch('maler_avlesninger',{method:'POST',headers:{'Prefer':'return=representation,resolution=merge-duplicates'},body:JSON.stringify({meter_id:id,year,month,reading:val,consumption})});
     dbCache[ck(id,year,month)]={reading:val,consumption};
     btn.textContent='Lagret ✓';btn.className='save-btn saved';
     setTimeout(()=>{btn.textContent='Lagre avlesning';btn.className='save-btn';renderMeters();},1800);
