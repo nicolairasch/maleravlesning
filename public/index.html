@@ -348,7 +348,7 @@ const SUPABASE_URL='https://vaivnbwpatdxvgirhrht.supabase.co';
 const SUPABASE_KEY='sb_publishable_MYU_ipmt9d88qx6GnvjHCA_ysGl2aiF';
 const MONTHS=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 const METERS=[
-  {id:'fellesmaler',name:'Fellesmåler',meterId:'HN81004484',group:'Fellesmålere'},
+  {id:'fellesmaler',name:'Fellesmåler',meterId:'HN81004484',group:'Fellesmålere',consumptionOnly:true},
   {id:'jysk',name:'Jysk butikk',meterId:'',group:'Jysk / Jula'},
   {id:'jysk_vent',name:'Jysk/Jula ventilasjon',meterId:'',group:'Jysk / Jula'},
   {id:'jula',name:'Jula butikk',meterId:'',group:'Jysk / Jula'},
@@ -461,6 +461,12 @@ function renderMeters(){
       html+=`<div class="meter-card">
         <p class="meter-name">${m.name}</p>
         <p class="meter-sub">${m.meterId||'&nbsp;'}</p>
+        ${m.consumptionOnly ? `
+        <div class="input-group">
+          <input class="reading-input" type="text" inputmode="numeric" pattern="[0-9]*" id="inp-${m.id}" placeholder="Forbruk kWh…" value="${cons!==null&&cons!==undefined&&cons>0?Math.round(cons):''}" oninput="onConsumptionChange('${m.id}',${year},${month},this.value)"/>
+        </div>
+        ${consHtml}
+        ` : `
         <div class="input-group">
           <input class="reading-input" type="text" inputmode="numeric" pattern="[0-9]*" id="inp-${m.id}" placeholder="Målerstand…" value="${cur!==null&&cur!==undefined?cur:''}" oninput="onReadingChange('${m.id}',${year},${month},this.value)"/>
           <button class="cam-btn" id="cam-${m.id}" onclick="openCamModal('${m.id}','${m.name}')" title="Skann med kamera">
@@ -473,11 +479,19 @@ function renderMeters(){
         </div>
         ${prev!==null?`<p class="prev-reading">Forrige: <strong>${Math.round(prev).toLocaleString('nb-NO')}</strong></p>`:''}
         ${consHtml}
+        `}
         <button class="save-btn" id="savebtn-${m.id}" onclick="saveReading('${m.id}',${year},${month})">Lagre avlesning</button>
       </div>`;
     });
   });
   list.innerHTML=html;
+}
+
+function onConsumptionChange(id,year,month,val){
+  const num=val===''?null:parseInt(val.replace(/\s/g,''),10);
+  if(!dbCache[ck(id,year,month)])dbCache[ck(id,year,month)]={};
+  dbCache[ck(id,year,month)].consumption=num;
+  dbCache[ck(id,year,month)].reading=null;
 }
 
 function onReadingChange(id,year,month,val){
@@ -503,12 +517,18 @@ async function saveReading(id,year,month){
   const btn=document.getElementById(`savebtn-${id}`);
   const val=inp?parseInt(inp.value.replace(/\s/g,''),10):null;
   if(val===null||isNaN(val)){inp&&inp.focus();return;}
-  const prev=getPrevReading(id,year,month);
-  const consumption=prev!==null?val-prev:null;
+  const meter=METERS.find(m=>m.id===id);
+  let reading=val,consumption=null;
+  if(meter&&meter.consumptionOnly){
+    reading=null;consumption=val;
+  }else{
+    const prev=getPrevReading(id,year,month);
+    consumption=prev!==null?val-prev:null;
+  }
   btn.textContent='Lagrer…';btn.className='save-btn saving';
   try{
-    await dbFetch('maler_avlesninger',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({meter_id:id,year,month,reading:val,consumption})});
-    dbCache[ck(id,year,month)]={reading:val,consumption};
+    await dbFetch('maler_avlesninger',{method:'POST',body:JSON.stringify({meter_id:id,year,month,reading,consumption})});
+    dbCache[ck(id,year,month)]={reading,consumption};
     btn.textContent='Lagret ✓';btn.className='save-btn saved';
     setTimeout(()=>{btn.textContent='Lagre avlesning';btn.className='save-btn';renderMeters();},1800);
   }catch(e){
