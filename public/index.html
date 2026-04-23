@@ -856,8 +856,8 @@ async function generatePDF(){
 
   // Build table rows
   const rows = data.map(({m,cons,sameMthLastYr,reading,ytd,ytdPy,prevMonthCons}) => {
-    const vsLastYr = sameMthLastYr>0 ? (cons>0 ? `${cons>sameMthLastYr?'▲':'▼'} ${Math.abs(Math.round((cons-sameMthLastYr)/sameMthLastYr*100))}%` : '—') : '—';
-    const vsYtd = ytdPy>0 ? (ytd>0 ? `${ytd>ytdPy?'▲':'▼'} ${Math.abs(Math.round((ytd-ytdPy)/ytdPy*100))}%` : '—') : '—';
+    const vsLastYr = sameMthLastYr>0 ? (cons>0 ? `${cons>sameMthLastYr?'+':'-'}${Math.abs(Math.round((cons-sameMthLastYr)/sameMthLastYr*100))}%` : '—') : '—';
+    const vsYtd = ytdPy>0 ? (ytd>0 ? `${ytd>ytdPy?'+':'-'}${Math.abs(Math.round((ytd-ytdPy)/ytdPy*100))}%` : '—') : '—';
     return [
       m.meterId ? `${m.name}\n${m.meterId}` : m.name,
       reading!==null ? Math.round(reading).toLocaleString('nb-NO') : '—',
@@ -876,8 +876,8 @@ async function generatePDF(){
   const ovrMndPy = Math.max(0, (getConsumption('fellesmaler',py,month)||0) - otherIdsPdf.reduce((s,id)=>s+(getConsumption(id,py,month)||0),0));
   const ovrYtd = Math.max(0, Array.from({length:month+1},(_,i)=>getConsumption('fellesmaler',year,i)||0).reduce((a,b)=>a+b,0) - otherIdsPdf.reduce((s,id)=>s+Array.from({length:month+1},(_,i)=>getConsumption(id,year,i)||0).reduce((a,b)=>a+b,0),0));
   const ovrYtdPy = Math.max(0, Array.from({length:month+1},(_,i)=>getConsumption('fellesmaler',py,i)||0).reduce((a,b)=>a+b,0) - otherIdsPdf.reduce((s,id)=>s+Array.from({length:month+1},(_,i)=>getConsumption(id,py,i)||0).reduce((a,b)=>a+b,0),0));
-  const vsOvrMnd = ovrMndPy>0?`${ovrMnd>ovrMndPy?'▲':'▼'} ${Math.abs(Math.round((ovrMnd-ovrMndPy)/ovrMndPy*100))}%`:'—';
-  const vsOvrYtd = ovrYtdPy>0?`${ovrYtd>ovrYtdPy?'▲':'▼'} ${Math.abs(Math.round((ovrYtd-ovrYtdPy)/ovrYtdPy*100))}%`:'—';
+  const vsOvrMnd = ovrMndPy>0?`${ovrMnd>ovrMndPy?'+':'-'}${Math.abs(Math.round((ovrMnd-ovrMndPy)/ovrMndPy*100))}%`:'—';
+  const vsOvrYtd = ovrYtdPy>0?`${ovrYtd>ovrYtdPy?'+':'-'}${Math.abs(Math.round((ovrYtd-ovrYtdPy)/ovrYtdPy*100))}%`:'—';
   rows.push(['Øvrig kontorbygg','',Math.round(ovrMnd).toLocaleString('nb-NO'),Math.round(ovrMndPy).toLocaleString('nb-NO'),vsOvrMnd,Math.round(ovrYtd).toLocaleString('nb-NO'),Math.round(ovrYtdPy).toLocaleString('nb-NO'),vsOvrYtd]);
 
   doc.autoTable({
@@ -914,8 +914,8 @@ async function generatePDF(){
       // Color endring cells
       if((d.column.index===4||d.column.index===7) && d.section==='body'){
         const v = d.cell.raw||'';
-        if(v.includes('▲')) d.cell.styles.textColor = [192,57,43];
-        else if(v.includes('▼')) d.cell.styles.textColor = [14,127,110];
+        if(v.startsWith('+')) d.cell.styles.textColor = [192,57,43];
+        else if(v.startsWith('-')) d.cell.styles.textColor = [14,127,110];
       }
     },
     margin: { left: 14, right: 14 }
@@ -971,14 +971,34 @@ async function generatePDF(){
   const totKwh = julaTot+jyskTot+evoTot+ovrigTot;
   fordelingRows.push(['SUM','',totM2.toLocaleString('nb-NO'),Math.round(totKwh).toLocaleString('nb-NO'),((totKwh/totM2)*annFactor).toFixed(1)]);
 
-  const fordelingY = finalY + 28;
+  const fordelingY = 20;
+  doc.addPage();
+  // Header på side 2
+  doc.setFillColor(26, 58, 107);
+  doc.rect(0, 0, pageW, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BJERCH & KREFTING', 14, 10);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('Eiendomsforvaltning', 14, 15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(`Måleravlesning — ${periodLabel}`, pageW - 14, 10, {align:'right'});
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`Generert ${new Date().toLocaleDateString('nb-NO', {day:'2-digit',month:'long',year:'numeric'})}`, pageW - 14, 15, {align:'right'});
+  doc.setFillColor(232, 160, 32);
+  doc.rect(0, 22, pageW, 1.5, 'F');
+
   doc.setTextColor(26,58,107);
   doc.setFontSize(11);
   doc.setFont('helvetica','bold');
-  doc.text(`Fordeling per leietaker — ${periodLabel}`, 14, fordelingY);
+  doc.text(`Fordeling per leietaker — ${periodLabel}`, 14, 32);
 
   doc.autoTable({
-    startY: fordelingY + 3,
+    startY: 35,
     head: [['Leietaker','Type areal','Areal (m²)','Forbruk (kWh)',kwhM2Header]],
     body: fordelingRows,
     theme: 'grid',
@@ -1000,14 +1020,18 @@ async function generatePDF(){
     margin: { left: 14, right: 14 }
   });
 
-  // Footer
-  doc.setFillColor(245,244,240);
-  doc.rect(0, pageH-10, pageW, 10, 'F');
-  doc.setTextColor(150,150,140);
-  doc.setFontSize(7);
-  doc.setFont('helvetica','normal');
-  doc.text('Bjerch & Krefting Eiendomsforvaltning', 14, pageH-4);
-  doc.text(`Side 1 av 1  •  ${new Date().toLocaleDateString('nb-NO')}`, pageW-14, pageH-4, {align:'right'});
+  // Footer på alle sider
+  const totalPages = doc.internal.getNumberOfPages();
+  for(let p=1;p<=totalPages;p++){
+    doc.setPage(p);
+    doc.setFillColor(245,244,240);
+    doc.rect(0, pageH-10, pageW, 10, 'F');
+    doc.setTextColor(150,150,140);
+    doc.setFontSize(7);
+    doc.setFont('helvetica','normal');
+    doc.text('Bjerch & Krefting Eiendomsforvaltning', 14, pageH-4);
+    doc.text(`Side ${p} av ${totalPages}  •  ${new Date().toLocaleDateString('nb-NO')}`, pageW-14, pageH-4, {align:'right'});
+  }
 
   const filename = `Maaleravlesning_${MONTHS[month]}_${year}.pdf`;
   doc.save(filename);
