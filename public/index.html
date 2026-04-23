@@ -687,10 +687,18 @@ function renderRapportPreview(){
         <td style="text-align:right">${cons>0&&consPy>0?pct(cons,consPy):'—'}</td>
       </tr>`;
     });
+    // Beregn Øvrig kontorbygg = Fellesmåler - (alle andre målere)
+    const otherIds = ['jysk','jysk_vent','jula','lager','evo_lok','evo_vent'];
+    const fellesYr = sumYear('fellesmaler', year);
+    const fellesPyYr = sumYear('fellesmaler', py);
+    const othersYr = otherIds.reduce((s,id)=>s+sumYear(id,year),0);
+    const othersPyYr = otherIds.reduce((s,id)=>s+sumYear(id,py),0);
+    const ovrigYr = Math.max(0, fellesYr - othersYr);
+    const ovrigPyYr = Math.max(0, fellesPyYr - othersPyYr);
     html+=`<tr class="total-row">
-      <td>Total</td>
-      <td style="text-align:right">${Math.round(totalCons).toLocaleString('nb-NO')} kWh</td>
-      <td style="text-align:right">${totalPrevM>0?pct(totalCons,totalPrevM):'—'}</td>
+      <td>Øvrig kontorbygg</td>
+      <td style="text-align:right">${ovrigYr>0?Math.round(ovrigYr).toLocaleString('nb-NO')+' kWh':'—'}</td>
+      <td style="text-align:right">${ovrigYr>0&&ovrigPyYr>0?pct(ovrigYr,ovrigPyYr):'—'}</td>
     </tr>`;
   } else {
     data.forEach(({m,cons,sameMthLastYr,reading,ytd,ytdPy})=>{
@@ -704,13 +712,27 @@ function renderRapportPreview(){
         <td style="text-align:right">${ytd>0&&ytdPy>0?pct(ytd,ytdPy):'—'}</td>
       </tr>`;
     });
+    // Beregn Øvrig kontorbygg = Fellesmåler - (alle andre målere)
+    const otherIdsM = ['jysk','jysk_vent','jula','lager','evo_lok','evo_vent'];
+    const fellesMnd = getConsumption('fellesmaler',year,month)||0;
+    const fellesMndPy = getConsumption('fellesmaler',py,month)||0;
+    const othersMnd = otherIdsM.reduce((s,id)=>s+(getConsumption(id,year,month)||0),0);
+    const othersMndPy = otherIdsM.reduce((s,id)=>s+(getConsumption(id,py,month)||0),0);
+    const ovrigMnd = Math.max(0, fellesMnd - othersMnd);
+    const ovrigMndPy = Math.max(0, fellesMndPy - othersMndPy);
+    const fellesYtd = Array.from({length:month+1},(_,i)=>getConsumption('fellesmaler',year,i)||0).reduce((a,b)=>a+b,0);
+    const fellesYtdPy = Array.from({length:month+1},(_,i)=>getConsumption('fellesmaler',py,i)||0).reduce((a,b)=>a+b,0);
+    const othersYtd = otherIdsM.reduce((s,id)=>s+Array.from({length:month+1},(_,i)=>getConsumption(id,year,i)||0).reduce((a,b)=>a+b,0),0);
+    const othersYtdPy = otherIdsM.reduce((s,id)=>s+Array.from({length:month+1},(_,i)=>getConsumption(id,py,i)||0).reduce((a,b)=>a+b,0),0);
+    const ovrigYtd = Math.max(0, fellesYtd - othersYtd);
+    const ovrigYtdPy = Math.max(0, fellesYtdPy - othersYtdPy);
     html+=`<tr class="total-row">
-      <td>Total</td>
+      <td>Øvrig kontorbygg</td>
       <td></td>
-      <td style="text-align:right">${Math.round(totalCons).toLocaleString('nb-NO')} kWh</td>
-      <td style="text-align:right">${totalPrevM>0?pct(totalCons,totalPrevM):'—'}</td>
-      <td style="text-align:right">${Math.round(totalYtd).toLocaleString('nb-NO')} kWh</td>
-      <td style="text-align:right">${totalYtdPy>0?pct(totalYtd,totalYtdPy):'—'}</td>
+      <td style="text-align:right">${ovrigMnd>0?Math.round(ovrigMnd).toLocaleString('nb-NO')+' kWh':'—'}</td>
+      <td style="text-align:right">${ovrigMnd>0&&ovrigMndPy>0?pct(ovrigMnd,ovrigMndPy):'—'}</td>
+      <td style="text-align:right">${ovrigYtd>0?Math.round(ovrigYtd).toLocaleString('nb-NO')+' kWh':'—'}</td>
+      <td style="text-align:right">${ovrigYtd>0&&ovrigYtdPy>0?pct(ovrigYtd,ovrigYtdPy):'—'}</td>
     </tr>`;
   }
   html += '</tbody></table>';
@@ -740,8 +762,8 @@ function renderRapportPreview(){
   const annualizeFactor = isYear ? 1 : 12;
 
   const fordeling = [
-    {navn: 'Jula butikk', type: 'Butikklokale', m2: AREAS.jula, kwh: julaForbruk},
-    {navn: 'Jysk butikk', type: 'Butikklokale', m2: AREAS.jysk, kwh: jyskForbruk},
+    {navn: 'Jula', type: 'Butikklokale', m2: AREAS.jula, kwh: julaForbruk},
+    {navn: 'Jysk', type: 'Butikklokale', m2: AREAS.jysk, kwh: jyskForbruk},
     {navn: 'EVO', type: 'Treningslokale', m2: AREAS.evo, kwh: evoForbruk},
     {navn: 'Øvrig kontorbygg', type: 'Kontor/Bilbutikk/lager', m2: AREAS.ovrig, kwh: ovrigForbruk}
   ];
@@ -848,12 +870,15 @@ async function generatePDF(){
     ];
   });
 
-  // Totals row
-  let tC=0,tPM=0,tY=0,tYP=0;
-  data.forEach(d=>{tC+=d.cons;tPM+=d.sameMthLastYr;tY+=d.ytd;tYP+=d.ytdPy;});
-  const vsTotal = tPM>0?`${tC>tPM?'▲':'▼'} ${Math.abs(Math.round((tC-tPM)/tPM*100))}%`:'—';
-  const vsYtdTotal = tYP>0?`${tY>tYP?'▲':'▼'} ${Math.abs(Math.round((tY-tYP)/tYP*100))}%`:'—';
-  rows.push(['TOTAL','',Math.round(tC).toLocaleString('nb-NO'),Math.round(tPM).toLocaleString('nb-NO'),vsTotal,Math.round(tY).toLocaleString('nb-NO'),Math.round(tYP).toLocaleString('nb-NO'),vsYtdTotal]);
+  // Øvrig kontorbygg row = Fellesmåler minus alle andre
+  const otherIdsPdf = ['jysk','jysk_vent','jula','lager','evo_lok','evo_vent'];
+  const ovrMnd = Math.max(0, (getConsumption('fellesmaler',year,month)||0) - otherIdsPdf.reduce((s,id)=>s+(getConsumption(id,year,month)||0),0));
+  const ovrMndPy = Math.max(0, (getConsumption('fellesmaler',py,month)||0) - otherIdsPdf.reduce((s,id)=>s+(getConsumption(id,py,month)||0),0));
+  const ovrYtd = Math.max(0, Array.from({length:month+1},(_,i)=>getConsumption('fellesmaler',year,i)||0).reduce((a,b)=>a+b,0) - otherIdsPdf.reduce((s,id)=>s+Array.from({length:month+1},(_,i)=>getConsumption(id,year,i)||0).reduce((a,b)=>a+b,0),0));
+  const ovrYtdPy = Math.max(0, Array.from({length:month+1},(_,i)=>getConsumption('fellesmaler',py,i)||0).reduce((a,b)=>a+b,0) - otherIdsPdf.reduce((s,id)=>s+Array.from({length:month+1},(_,i)=>getConsumption(id,py,i)||0).reduce((a,b)=>a+b,0),0));
+  const vsOvrMnd = ovrMndPy>0?`${ovrMnd>ovrMndPy?'▲':'▼'} ${Math.abs(Math.round((ovrMnd-ovrMndPy)/ovrMndPy*100))}%`:'—';
+  const vsOvrYtd = ovrYtdPy>0?`${ovrYtd>ovrYtdPy?'▲':'▼'} ${Math.abs(Math.round((ovrYtd-ovrYtdPy)/ovrYtdPy*100))}%`:'—';
+  rows.push(['Øvrig kontorbygg','',Math.round(ovrMnd).toLocaleString('nb-NO'),Math.round(ovrMndPy).toLocaleString('nb-NO'),vsOvrMnd,Math.round(ovrYtd).toLocaleString('nb-NO'),Math.round(ovrYtdPy).toLocaleString('nb-NO'),vsOvrYtd]);
 
   doc.autoTable({
     startY: 28,
@@ -937,8 +962,8 @@ async function generatePDF(){
   const kwhM2Header = isYear ? 'kWh/m² (år)' : 'kWh/m² (annualisert)';
 
   const fordelingRows = [
-    ['Jula butikk','Butikklokale',AREAS.jula.toLocaleString('nb-NO'),Math.round(julaTot).toLocaleString('nb-NO'),((julaTot/AREAS.jula)*annFactor).toFixed(1)],
-    ['Jysk butikk','Butikklokale',AREAS.jysk.toLocaleString('nb-NO'),Math.round(jyskTot).toLocaleString('nb-NO'),((jyskTot/AREAS.jysk)*annFactor).toFixed(1)],
+    ['Jula','Butikklokale',AREAS.jula.toLocaleString('nb-NO'),Math.round(julaTot).toLocaleString('nb-NO'),((julaTot/AREAS.jula)*annFactor).toFixed(1)],
+    ['Jysk','Butikklokale',AREAS.jysk.toLocaleString('nb-NO'),Math.round(jyskTot).toLocaleString('nb-NO'),((jyskTot/AREAS.jysk)*annFactor).toFixed(1)],
     ['EVO','Treningslokale',AREAS.evo.toLocaleString('nb-NO'),Math.round(evoTot).toLocaleString('nb-NO'),((evoTot/AREAS.evo)*annFactor).toFixed(1)],
     ['Øvrig kontorbygg','Kontor/Bilbutikk/lager',AREAS.ovrig.toLocaleString('nb-NO'),Math.round(ovrigTot).toLocaleString('nb-NO'),((ovrigTot/AREAS.ovrig)*annFactor).toFixed(1)]
   ];
