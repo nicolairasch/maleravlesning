@@ -677,6 +677,73 @@ function renderRapportPreview(){
     <td style="text-align:right">${totalYtdPy>0?pct(totalYtd,totalYtdPy):'—'}</td>
   </tr>`;
   html += '</tbody></table>';
+
+  // Leietakerfordeling (basert på Excel-formler)
+  const AREAS = {
+    jula: 3217,
+    jysk: 1752,
+    evo: 460,
+    ovrig: 4270
+  };
+  const jyskJulaTotal = AREAS.jysk + AREAS.jula;
+
+  const felles = getConsumption('fellesmaler', year, month) || 0;
+  const jyskC = getConsumption('jysk', year, month) || 0;
+  const jyskVentC = getConsumption('jysk_vent', year, month) || 0;
+  const julaC = getConsumption('jula', year, month) || 0;
+  const lagerC = getConsumption('lager', year, month) || 0;
+  const evoLokC = getConsumption('evo_lok', year, month) || 0;
+  const evoVentC = getConsumption('evo_vent', year, month) || 0;
+
+  const julaShare = AREAS.jula / jyskJulaTotal;
+  const jyskShare = AREAS.jysk / jyskJulaTotal;
+
+  const julaForbruk = (julaShare * lagerC) + julaC + (julaShare * jyskVentC);
+  const jyskForbruk = (jyskShare * lagerC) + jyskC + (jyskShare * jyskVentC);
+  const evoForbruk = evoLokC + evoVentC;
+  const ovrigForbruk = Math.max(0, felles - (jyskC + jyskVentC + julaC + lagerC) - evoForbruk);
+
+  const fordeling = [
+    {navn: 'Jula butikk', type: 'Butikklokale', m2: AREAS.jula, kwh: julaForbruk},
+    {navn: 'Jysk butikk', type: 'Butikklokale', m2: AREAS.jysk, kwh: jyskForbruk},
+    {navn: 'EVO', type: 'Treningslokale', m2: AREAS.evo, kwh: evoForbruk},
+    {navn: 'Øvrig kontorbygg', type: 'Kontor/Bilbutikk/lager', m2: AREAS.ovrig, kwh: ovrigForbruk}
+  ];
+
+  let totalM2 = 0, totalKwh = 0;
+  fordeling.forEach(f => { totalM2 += f.m2; totalKwh += f.kwh; });
+
+  html += `<h3 style="margin-top:28px;margin-bottom:12px;color:var(--ink);font-size:15px">Fordeling per leietaker — ${MONTHS[month]} ${year}</h3>
+  <table class="preview-table">
+    <thead><tr>
+      <th>Leietaker</th>
+      <th>Type areal</th>
+      <th style="text-align:right">Areal (m²)</th>
+      <th style="text-align:right">Forbruk (kWh)</th>
+      <th style="text-align:right">kWh/m²</th>
+    </tr></thead><tbody>`;
+
+  fordeling.forEach(f => {
+    const kwhM2 = f.m2 > 0 ? (f.kwh / f.m2) : 0;
+    html += `<tr>
+      <td><strong>${f.navn}</strong></td>
+      <td style="color:#666">${f.type}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${f.m2.toLocaleString('nb-NO')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${Math.round(f.kwh).toLocaleString('nb-NO')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${kwhM2.toFixed(1)}</td>
+    </tr>`;
+  });
+
+  const totalKwhM2 = totalM2 > 0 ? (totalKwh / totalM2) : 0;
+  html += `<tr class="total-row">
+    <td>Sum</td>
+    <td></td>
+    <td style="text-align:right">${totalM2.toLocaleString('nb-NO')}</td>
+    <td style="text-align:right">${Math.round(totalKwh).toLocaleString('nb-NO')}</td>
+    <td style="text-align:right">${totalKwhM2.toFixed(1)}</td>
+  </tr>`;
+  html += '</tbody></table>';
+
   document.getElementById('rapport-table-wrap').innerHTML = html;
 }
 
@@ -802,6 +869,61 @@ async function generatePDF(){
     doc.text(`${MONTHS[month]}: ${Math.round(gCons).toLocaleString('nb-NO')} kWh`, xPos+6, finalY+11);
     doc.text(`Hittil i år: ${Math.round(gYtd).toLocaleString('nb-NO')} kWh`, xPos+6, finalY+16);
     xPos += 88;
+  });
+
+  // === Fordeling per leietaker (kWh/m²) ===
+  const AREAS = {jula: 3217, jysk: 1752, evo: 460, ovrig: 4270};
+  const jjT = AREAS.jysk + AREAS.jula;
+  const felles = getConsumption('fellesmaler', year, month) || 0;
+  const jyskC = getConsumption('jysk', year, month) || 0;
+  const jyskVentC = getConsumption('jysk_vent', year, month) || 0;
+  const julaC = getConsumption('jula', year, month) || 0;
+  const lagerC = getConsumption('lager', year, month) || 0;
+  const evoLokC = getConsumption('evo_lok', year, month) || 0;
+  const evoVentC = getConsumption('evo_vent', year, month) || 0;
+  const julaShare = AREAS.jula/jjT, jyskShare = AREAS.jysk/jjT;
+  const julaTot = (julaShare*lagerC)+julaC+(julaShare*jyskVentC);
+  const jyskTot = (jyskShare*lagerC)+jyskC+(jyskShare*jyskVentC);
+  const evoTot = evoLokC+evoVentC;
+  const ovrigTot = Math.max(0, felles - (jyskC+jyskVentC+julaC+lagerC) - evoTot);
+
+  const fordelingRows = [
+    ['Jula butikk','Butikklokale',AREAS.jula.toLocaleString('nb-NO'),Math.round(julaTot).toLocaleString('nb-NO'),(julaTot/AREAS.jula).toFixed(1)],
+    ['Jysk butikk','Butikklokale',AREAS.jysk.toLocaleString('nb-NO'),Math.round(jyskTot).toLocaleString('nb-NO'),(jyskTot/AREAS.jysk).toFixed(1)],
+    ['EVO','Treningslokale',AREAS.evo.toLocaleString('nb-NO'),Math.round(evoTot).toLocaleString('nb-NO'),(evoTot/AREAS.evo).toFixed(1)],
+    ['Øvrig kontorbygg','Kontor/Bilbutikk/lager',AREAS.ovrig.toLocaleString('nb-NO'),Math.round(ovrigTot).toLocaleString('nb-NO'),(ovrigTot/AREAS.ovrig).toFixed(1)]
+  ];
+  const totM2 = AREAS.jula+AREAS.jysk+AREAS.evo+AREAS.ovrig;
+  const totKwh = julaTot+jyskTot+evoTot+ovrigTot;
+  fordelingRows.push(['SUM','',totM2.toLocaleString('nb-NO'),Math.round(totKwh).toLocaleString('nb-NO'),(totKwh/totM2).toFixed(1)]);
+
+  const fordelingY = finalY + 28;
+  doc.setTextColor(26,58,107);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text(`Fordeling per leietaker — ${MONTHS[month]} ${year}`, 14, fordelingY);
+
+  doc.autoTable({
+    startY: fordelingY + 3,
+    head: [['Leietaker','Type areal','Areal (m²)','Forbruk (kWh)','kWh/m²']],
+    body: fordelingRows,
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: [26,58,107], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
+    columnStyles: {
+      0: { halign: 'left', cellWidth: 50, fontStyle: 'bold' },
+      1: { halign: 'left', cellWidth: 55 },
+      2: { halign: 'right', cellWidth: 30 },
+      3: { halign: 'right', cellWidth: 35 },
+      4: { halign: 'right', cellWidth: 25 }
+    },
+    didParseCell(d){
+      if(d.row.index === fordelingRows.length-1){
+        d.cell.styles.fillColor = [240,237,230];
+        d.cell.styles.fontStyle = 'bold';
+      }
+    },
+    margin: { left: 14, right: 14 }
   });
 
   // Footer
