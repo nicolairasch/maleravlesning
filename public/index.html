@@ -416,10 +416,11 @@ function setStatus(txt,state){
 }
 function ck(id,y,m){return`${id}_${y}_${m}`;}
 function getReading(id,year,month){
+  const c=dbCache[ck(id,year,month)];
+  if(c&&c.reading!==null&&c.reading!==undefined)return c.reading;
   const b=BASE_READINGS[id];
   if(b&&b[year]&&b[year][month]!==undefined)return b[year][month];
-  const c=dbCache[ck(id,year,month)];
-  return c?c.reading:null;
+  return null;
 }
 function getPrevReading(id,year,month){return month===0?getReading(id,year-1,11):getReading(id,year,month-1);}
 function getConsumption(id,year,month){
