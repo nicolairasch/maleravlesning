@@ -291,7 +291,11 @@ canvas#capture-canvas { display: none; }
 
   <div id="tab-rapport" style="display:none">
     <div class="month-bar">
-      <span class="month-bar-label">Rapport for</span>
+      <span class="month-bar-label">Periode</span>
+      <select id="rpt-period" onchange="onPeriodChange()">
+        <option value="month" selected>Måned</option>
+        <option value="year">Hele året</option>
+      </select>
       <select id="rpt-month" onchange="renderRapportPreview()">
         <option value="0">Januar</option><option value="1">Februar</option><option value="2">Mars</option>
         <option value="3">April</option><option value="4">Mai</option><option value="5">Juni</option>
@@ -637,10 +641,26 @@ function getRapportData(month, year){
   });
 }
 
+function onPeriodChange(){
+  const period = document.getElementById('rpt-period').value;
+  document.getElementById('rpt-month').style.display = period==='year' ? 'none' : '';
+  renderRapportPreview();
+}
+
 function renderRapportPreview(){
+  const period = document.getElementById('rpt-period')?.value || 'month';
   const month = parseInt(document.getElementById('rpt-month').value);
   const year  = parseInt(document.getElementById('rpt-year').value);
   const py = year - 1;
+
+  // Helper: sum consumption across months for a meter
+  function sumYear(id, y){ return Array.from({length:12},(_,i)=>getConsumption(id,y,i)||0).reduce((a,b)=>a+b,0); }
+  function sumYearTo(id, y, toMonth){ return Array.from({length:toMonth+1},(_,i)=>getConsumption(id,y,i)||0).reduce((a,b)=>a+b,0); }
+
+  const isYear = period === 'year';
+  const periodLabel = isYear ? `Hele ${year}` : `${MONTHS[month]} ${year}`;
+  const periodLabelPy = isYear ? `Hele ${py}` : `${MONTHS[month]} ${py}`;
+
   const data = getRapportData(month, year);
 
   function pct(a,b){ if(!b) return ''; const d=Math.round((a-b)/b*100); return d>0?`<span class="tag-up">▲${d}%</span>`:`<span class="tag-down">▼${Math.abs(d)}%</span>`; }
@@ -648,52 +668,64 @@ function renderRapportPreview(){
   let html = `<table class="preview-table">
     <thead><tr>
       <th>Måler</th>
-      <th style="text-align:right">Målerstand</th>
-      <th style="text-align:right">Forbruk ${MONTHS[month]}</th>
-      <th style="text-align:right">vs ${MONTHS[month]} ${py}</th>
-      <th style="text-align:right">Hittil i år</th>
-      <th style="text-align:right">vs hittil ${py}</th>
+      ${isYear ? '' : '<th style="text-align:right">Målerstand</th>'}
+      <th style="text-align:right">Forbruk ${periodLabel}</th>
+      <th style="text-align:right">vs ${periodLabelPy}</th>
+      ${isYear ? '' : '<th style="text-align:right">Hittil i år</th><th style="text-align:right">vs hittil '+py+'</th>'}
     </tr></thead><tbody>`;
 
   let totalCons=0, totalPrevM=0, totalYtd=0, totalYtdPy=0;
-  data.forEach(({m,cons,sameMthLastYr,reading,ytd,ytdPy})=>{
-    totalCons+=cons; totalPrevM+=sameMthLastYr; totalYtd+=ytd; totalYtdPy+=ytdPy;
-    html+=`<tr>
-      <td><strong>${m.name}</strong>${m.meterId?`<br><span style="font-size:11px;color:#888">${m.meterId}</span>`:''}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${reading!==null?Math.round(reading).toLocaleString('nb-NO'):'—'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${cons>0?Math.round(cons).toLocaleString('nb-NO')+' kWh':'—'}</td>
-      <td style="text-align:right">${cons>0&&sameMthLastYr>0?pct(cons,sameMthLastYr):'—'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${ytd>0?Math.round(ytd).toLocaleString('nb-NO')+' kWh':'—'}</td>
-      <td style="text-align:right">${ytd>0&&ytdPy>0?pct(ytd,ytdPy):'—'}</td>
+  if(isYear){
+    METERS.forEach(m=>{
+      const cons = sumYear(m.id, year);
+      const consPy = sumYear(m.id, py);
+      totalCons+=cons; totalPrevM+=consPy;
+      html+=`<tr>
+        <td><strong>${m.name}</strong>${m.meterId?`<br><span style="font-size:11px;color:#888">${m.meterId}</span>`:''}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${cons>0?Math.round(cons).toLocaleString('nb-NO')+' kWh':'—'}</td>
+        <td style="text-align:right">${cons>0&&consPy>0?pct(cons,consPy):'—'}</td>
+      </tr>`;
+    });
+    html+=`<tr class="total-row">
+      <td>Total</td>
+      <td style="text-align:right">${Math.round(totalCons).toLocaleString('nb-NO')} kWh</td>
+      <td style="text-align:right">${totalPrevM>0?pct(totalCons,totalPrevM):'—'}</td>
     </tr>`;
-  });
-
-  html+=`<tr class="total-row">
-    <td>Total</td>
-    <td></td>
-    <td style="text-align:right">${Math.round(totalCons).toLocaleString('nb-NO')} kWh</td>
-    <td style="text-align:right">${totalPrevM>0?pct(totalCons,totalPrevM):'—'}</td>
-    <td style="text-align:right">${Math.round(totalYtd).toLocaleString('nb-NO')} kWh</td>
-    <td style="text-align:right">${totalYtdPy>0?pct(totalYtd,totalYtdPy):'—'}</td>
-  </tr>`;
+  } else {
+    data.forEach(({m,cons,sameMthLastYr,reading,ytd,ytdPy})=>{
+      totalCons+=cons; totalPrevM+=sameMthLastYr; totalYtd+=ytd; totalYtdPy+=ytdPy;
+      html+=`<tr>
+        <td><strong>${m.name}</strong>${m.meterId?`<br><span style="font-size:11px;color:#888">${m.meterId}</span>`:''}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${reading!==null?Math.round(reading).toLocaleString('nb-NO'):'—'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${cons>0?Math.round(cons).toLocaleString('nb-NO')+' kWh':'—'}</td>
+        <td style="text-align:right">${cons>0&&sameMthLastYr>0?pct(cons,sameMthLastYr):'—'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${ytd>0?Math.round(ytd).toLocaleString('nb-NO')+' kWh':'—'}</td>
+        <td style="text-align:right">${ytd>0&&ytdPy>0?pct(ytd,ytdPy):'—'}</td>
+      </tr>`;
+    });
+    html+=`<tr class="total-row">
+      <td>Total</td>
+      <td></td>
+      <td style="text-align:right">${Math.round(totalCons).toLocaleString('nb-NO')} kWh</td>
+      <td style="text-align:right">${totalPrevM>0?pct(totalCons,totalPrevM):'—'}</td>
+      <td style="text-align:right">${Math.round(totalYtd).toLocaleString('nb-NO')} kWh</td>
+      <td style="text-align:right">${totalYtdPy>0?pct(totalYtd,totalYtdPy):'—'}</td>
+    </tr>`;
+  }
   html += '</tbody></table>';
 
-  // Leietakerfordeling (basert på Excel-formler)
-  const AREAS = {
-    jula: 3217,
-    jysk: 1752,
-    evo: 460,
-    ovrig: 4270
-  };
+  // Leietakerfordeling
+  const AREAS = {jula: 3217, jysk: 1752, evo: 460, ovrig: 4270};
   const jyskJulaTotal = AREAS.jysk + AREAS.jula;
 
-  const felles = getConsumption('fellesmaler', year, month) || 0;
-  const jyskC = getConsumption('jysk', year, month) || 0;
-  const jyskVentC = getConsumption('jysk_vent', year, month) || 0;
-  const julaC = getConsumption('jula', year, month) || 0;
-  const lagerC = getConsumption('lager', year, month) || 0;
-  const evoLokC = getConsumption('evo_lok', year, month) || 0;
-  const evoVentC = getConsumption('evo_vent', year, month) || 0;
+  // Consumption for selected period
+  const felles = isYear ? sumYear('fellesmaler',year) : (getConsumption('fellesmaler',year,month)||0);
+  const jyskC = isYear ? sumYear('jysk',year) : (getConsumption('jysk',year,month)||0);
+  const jyskVentC = isYear ? sumYear('jysk_vent',year) : (getConsumption('jysk_vent',year,month)||0);
+  const julaC = isYear ? sumYear('jula',year) : (getConsumption('jula',year,month)||0);
+  const lagerC = isYear ? sumYear('lager',year) : (getConsumption('lager',year,month)||0);
+  const evoLokC = isYear ? sumYear('evo_lok',year) : (getConsumption('evo_lok',year,month)||0);
+  const evoVentC = isYear ? sumYear('evo_vent',year) : (getConsumption('evo_vent',year,month)||0);
 
   const julaShare = AREAS.jula / jyskJulaTotal;
   const jyskShare = AREAS.jysk / jyskJulaTotal;
@@ -702,6 +734,9 @@ function renderRapportPreview(){
   const jyskForbruk = (jyskShare * lagerC) + jyskC + (jyskShare * jyskVentC);
   const evoForbruk = evoLokC + evoVentC;
   const ovrigForbruk = Math.max(0, felles - (jyskC + jyskVentC + julaC + lagerC) - evoForbruk);
+
+  // Annualize kWh/m² for month view (× 12 to get year-equivalent)
+  const annualizeFactor = isYear ? 1 : 12;
 
   const fordeling = [
     {navn: 'Jula butikk', type: 'Butikklokale', m2: AREAS.jula, kwh: julaForbruk},
@@ -713,18 +748,20 @@ function renderRapportPreview(){
   let totalM2 = 0, totalKwh = 0;
   fordeling.forEach(f => { totalM2 += f.m2; totalKwh += f.kwh; });
 
-  html += `<h3 style="margin-top:28px;margin-bottom:12px;color:var(--ink);font-size:15px">Fordeling per leietaker — ${MONTHS[month]} ${year}</h3>
+  const kwhM2Label = isYear ? 'kWh/m² (år)' : 'kWh/m² (annualisert)';
+
+  html += `<h3 style="margin-top:28px;margin-bottom:12px;color:var(--ink);font-size:15px">Fordeling per leietaker — ${periodLabel}</h3>
   <table class="preview-table">
     <thead><tr>
       <th>Leietaker</th>
       <th>Type areal</th>
       <th style="text-align:right">Areal (m²)</th>
       <th style="text-align:right">Forbruk (kWh)</th>
-      <th style="text-align:right">kWh/m²</th>
+      <th style="text-align:right">${kwhM2Label}</th>
     </tr></thead><tbody>`;
 
   fordeling.forEach(f => {
-    const kwhM2 = f.m2 > 0 ? (f.kwh / f.m2) : 0;
+    const kwhM2 = f.m2 > 0 ? (f.kwh / f.m2) * annualizeFactor : 0;
     html += `<tr>
       <td><strong>${f.navn}</strong></td>
       <td style="color:#666">${f.type}</td>
@@ -734,7 +771,7 @@ function renderRapportPreview(){
     </tr>`;
   });
 
-  const totalKwhM2 = totalM2 > 0 ? (totalKwh / totalM2) : 0;
+  const totalKwhM2 = totalM2 > 0 ? (totalKwh / totalM2) * annualizeFactor : 0;
   html += `<tr class="total-row">
     <td>Sum</td>
     <td></td>
@@ -744,13 +781,20 @@ function renderRapportPreview(){
   </tr>`;
   html += '</tbody></table>';
 
+  if(!isYear){
+    html += `<p style="font-size:11px;color:#888;margin-top:8px;font-style:italic">kWh/m² er annualisert (månedsforbruk × 12) for sammenligning med årstall</p>`;
+  }
+
   document.getElementById('rapport-table-wrap').innerHTML = html;
 }
 
 async function generatePDF(){
+  const period = document.getElementById('rpt-period')?.value || 'month';
   const month = parseInt(document.getElementById('rpt-month').value);
   const year  = parseInt(document.getElementById('rpt-year').value);
   const py = year - 1;
+  const isYear = period === 'year';
+  const periodLabel = isYear ? `Hele ${year}` : `${MONTHS[month]} ${year}`;
   const btn = document.getElementById('pdf-btn');
   btn.classList.add('generating');
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;animation:spin 1s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Genererer…`;
@@ -872,40 +916,44 @@ async function generatePDF(){
   });
 
   // === Fordeling per leietaker (kWh/m²) ===
+  function sumYr(id, y){ return Array.from({length:12},(_,i)=>getConsumption(id,y,i)||0).reduce((a,b)=>a+b,0); }
   const AREAS = {jula: 3217, jysk: 1752, evo: 460, ovrig: 4270};
   const jjT = AREAS.jysk + AREAS.jula;
-  const felles = getConsumption('fellesmaler', year, month) || 0;
-  const jyskC = getConsumption('jysk', year, month) || 0;
-  const jyskVentC = getConsumption('jysk_vent', year, month) || 0;
-  const julaC = getConsumption('jula', year, month) || 0;
-  const lagerC = getConsumption('lager', year, month) || 0;
-  const evoLokC = getConsumption('evo_lok', year, month) || 0;
-  const evoVentC = getConsumption('evo_vent', year, month) || 0;
+  const felles = isYear ? sumYr('fellesmaler',year) : (getConsumption('fellesmaler',year,month)||0);
+  const jyskC = isYear ? sumYr('jysk',year) : (getConsumption('jysk',year,month)||0);
+  const jyskVentC = isYear ? sumYr('jysk_vent',year) : (getConsumption('jysk_vent',year,month)||0);
+  const julaC = isYear ? sumYr('jula',year) : (getConsumption('jula',year,month)||0);
+  const lagerC = isYear ? sumYr('lager',year) : (getConsumption('lager',year,month)||0);
+  const evoLokC = isYear ? sumYr('evo_lok',year) : (getConsumption('evo_lok',year,month)||0);
+  const evoVentC = isYear ? sumYr('evo_vent',year) : (getConsumption('evo_vent',year,month)||0);
   const julaShare = AREAS.jula/jjT, jyskShare = AREAS.jysk/jjT;
   const julaTot = (julaShare*lagerC)+julaC+(julaShare*jyskVentC);
   const jyskTot = (jyskShare*lagerC)+jyskC+(jyskShare*jyskVentC);
   const evoTot = evoLokC+evoVentC;
   const ovrigTot = Math.max(0, felles - (jyskC+jyskVentC+julaC+lagerC) - evoTot);
 
+  const annFactor = isYear ? 1 : 12;
+  const kwhM2Header = isYear ? 'kWh/m² (år)' : 'kWh/m² (annualisert)';
+
   const fordelingRows = [
-    ['Jula butikk','Butikklokale',AREAS.jula.toLocaleString('nb-NO'),Math.round(julaTot).toLocaleString('nb-NO'),(julaTot/AREAS.jula).toFixed(1)],
-    ['Jysk butikk','Butikklokale',AREAS.jysk.toLocaleString('nb-NO'),Math.round(jyskTot).toLocaleString('nb-NO'),(jyskTot/AREAS.jysk).toFixed(1)],
-    ['EVO','Treningslokale',AREAS.evo.toLocaleString('nb-NO'),Math.round(evoTot).toLocaleString('nb-NO'),(evoTot/AREAS.evo).toFixed(1)],
-    ['Øvrig kontorbygg','Kontor/Bilbutikk/lager',AREAS.ovrig.toLocaleString('nb-NO'),Math.round(ovrigTot).toLocaleString('nb-NO'),(ovrigTot/AREAS.ovrig).toFixed(1)]
+    ['Jula butikk','Butikklokale',AREAS.jula.toLocaleString('nb-NO'),Math.round(julaTot).toLocaleString('nb-NO'),((julaTot/AREAS.jula)*annFactor).toFixed(1)],
+    ['Jysk butikk','Butikklokale',AREAS.jysk.toLocaleString('nb-NO'),Math.round(jyskTot).toLocaleString('nb-NO'),((jyskTot/AREAS.jysk)*annFactor).toFixed(1)],
+    ['EVO','Treningslokale',AREAS.evo.toLocaleString('nb-NO'),Math.round(evoTot).toLocaleString('nb-NO'),((evoTot/AREAS.evo)*annFactor).toFixed(1)],
+    ['Øvrig kontorbygg','Kontor/Bilbutikk/lager',AREAS.ovrig.toLocaleString('nb-NO'),Math.round(ovrigTot).toLocaleString('nb-NO'),((ovrigTot/AREAS.ovrig)*annFactor).toFixed(1)]
   ];
   const totM2 = AREAS.jula+AREAS.jysk+AREAS.evo+AREAS.ovrig;
   const totKwh = julaTot+jyskTot+evoTot+ovrigTot;
-  fordelingRows.push(['SUM','',totM2.toLocaleString('nb-NO'),Math.round(totKwh).toLocaleString('nb-NO'),(totKwh/totM2).toFixed(1)]);
+  fordelingRows.push(['SUM','',totM2.toLocaleString('nb-NO'),Math.round(totKwh).toLocaleString('nb-NO'),((totKwh/totM2)*annFactor).toFixed(1)]);
 
   const fordelingY = finalY + 28;
   doc.setTextColor(26,58,107);
   doc.setFontSize(11);
   doc.setFont('helvetica','bold');
-  doc.text(`Fordeling per leietaker — ${MONTHS[month]} ${year}`, 14, fordelingY);
+  doc.text(`Fordeling per leietaker — ${periodLabel}`, 14, fordelingY);
 
   doc.autoTable({
     startY: fordelingY + 3,
-    head: [['Leietaker','Type areal','Areal (m²)','Forbruk (kWh)','kWh/m²']],
+    head: [['Leietaker','Type areal','Areal (m²)','Forbruk (kWh)',kwhM2Header]],
     body: fordelingRows,
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 9, cellPadding: 4 },
